@@ -1,7 +1,6 @@
 import type React from "react"
 import type { Metadata } from "next"
 
-import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
 
 import { Inter, Playfair_Display, Geist as V0_Font_Geist, Geist_Mono as V0_Font_Geist_Mono, Source_Serif_4 as V0_Font_Source_Serif_4 } from 'next/font/google'
@@ -15,9 +14,8 @@ const inter = Inter({ subsets: ["latin"] })
 const playfair = Playfair_Display({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Luxury Estate - Architectural Masterpiece",
-  description: "Experience unparalleled luxury in this stunning contemporary residence",
-  generator: "v0.app",
+  title: "Casa en venta en Ciudad Jardín",
+  description: "La ciudad como vecina, la calma como hogar",
 }
 
 export default function RootLayout({
@@ -29,7 +27,6 @@ export default function RootLayout({
     <html lang="en" className="scroll-smooth">
       <body className={`font-sans antialiased`}>
         {children}
-        <Analytics />
       </body>
     </html>
   )

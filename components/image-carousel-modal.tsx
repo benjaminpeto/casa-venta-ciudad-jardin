@@ -96,6 +96,7 @@ export function ImageCarouselModal({
           height={600}
           className="max-w-full max-h-full object-contain animate-in fade-in zoom-in-95 duration-300"
           key={currentIndex}
+          priority
         />
 
         {/* Image counter */}
