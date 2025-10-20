@@ -52,7 +52,7 @@ Situada en una calle privada con acceso exclusivo para residentes, esta propieda
               </div>
 
               <div className="space-y-3 pt-6">
-                <h3 className="font-bold text-lg mb-4">Nearby Amenities</h3>
+                <h3 className="font-bold text-lg mb-4">Servicios cercanos</h3>
                 <div className="space-y-2 text-neutral-600">
                   <p>• A solo 10 minutos a pie de El Corte Inglés (zona Mesa y López)</p>
                   <p>• A 15 minutos caminando de la Playa de Las Canteras</p>

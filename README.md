@@ -35,12 +35,3 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
-## Environment variables
-
-This project uses Resend to send contact form emails. Create a local `.env.local` (gitignored) or configure your deployment to include:
-
-- `RESEND_API_KEY` — your Resend API key (required)
-- `CONTACT_EMAIL` — the recipient address for contact form submissions (required)
-- `SENDER_EMAIL` — the verified sending email address used as the `from` field (required)
-
-An example file is provided at `.env.example`. Use a verified sending address in the `from` field for production (the code uses `SENDER_EMAIL` in `.env.example`).

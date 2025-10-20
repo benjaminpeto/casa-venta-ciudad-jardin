@@ -1,70 +1,131 @@
-import React from "react"
-import { NextResponse } from "next/server"
-import { Resend } from "resend"
-import { EmailTemplate } from "@/components/email-template"
+"use server";
 
-// Fail fast if required env vars are not present. This avoids attempting to call
-// external services without proper configuration.
-const RESEND_API_KEY = process.env.RESEND_API_KEY
-const CONTACT_EMAIL = process.env.CONTACT_EMAIL
-const SENDER_EMAIL = process.env.SENDER_EMAIL
+import { NextResponse } from "next/server";
+import nodemailer from "nodemailer";
 
-if (!RESEND_API_KEY) {
-  // Throw at module load so CI/deploy will fail fast instead of runtime surprises.
-  throw new Error("Missing RESEND_API_KEY environment variable")
+const {
+  SMTP_HOST,
+  SMTP_PORT,
+  SMTP_USER,
+  SMTP_PASS,
+  SMTP_FROM,     // e.g. "Luxury Estate <no-reply@example.com>"
+  CONTACT_EMAIL, // where inquiries should land
+} = process.env;
+
+function isNonEmptyString(v: unknown) {
+  return typeof v === "string" && v.trim().length > 0;
 }
 
-if (!CONTACT_EMAIL) {
-  throw new Error("Missing CONTACT_EMAIL environment variable")
+function basicEmailLooksOk(email: string) {
+  const at = email.indexOf("@");
+  return at > 0 && email.indexOf(".", at + 2) > 0;
 }
 
-if (!SENDER_EMAIL) {
-  throw new Error("Missing SENDER_EMAIL environment variable")
-}
+function buildTransport() {
+  if (!SMTP_HOST || !SMTP_PORT || !SMTP_FROM || !CONTACT_EMAIL) return null;
 
-const resend = new Resend(RESEND_API_KEY)
+  const port = Number(SMTP_PORT);
+  const secure = port === 465; // common convention; adjust if needed
 
-function isNonEmptyString(value: unknown) {
-  return typeof value === "string" && value.trim().length > 0
+  // If SMTP_USER/PASS are missing, attempt unauthenticated (some ISP relays allow this on LAN/VPN).
+  const auth =
+    SMTP_USER && SMTP_PASS ? { user: SMTP_USER, pass: SMTP_PASS } : undefined;
+
+  return nodemailer.createTransport({
+    host: SMTP_HOST,
+    port,
+    secure,
+    auth,
+  });
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
+    const body = await request.json().catch(() => ({}));
 
-    const name = isNonEmptyString(body?.name) ? body.name.trim() : ""
-    const email = isNonEmptyString(body?.email) ? body.email.trim() : ""
-    const phone = isNonEmptyString(body?.phone) ? body.phone.trim() : undefined
-    const message = isNonEmptyString(body?.message) ? body.message.trim() : ""
+    // Honeypot field—add a hidden input named "company" on the form; bots will fill it.
+    const botTrap = typeof body?.company === "string" && body.company.trim() !== "";
+    if (botTrap) {
+      // Pretend success to not tip bots off.
+      return NextResponse.json({ message: "Message received" }, { status: 200 });
+    }
 
-    // Validate required fields and basic email shape.
+    const name = isNonEmptyString(body?.name) ? body.name.trim() : "";
+    const email = isNonEmptyString(body?.email) ? body.email.trim() : "";
+    const phone = isNonEmptyString(body?.phone) ? body.phone.trim() : undefined;
+    const message = isNonEmptyString(body?.message) ? body.message.trim() : "";
+
     if (!name || !email || !message) {
-      return NextResponse.json({ error: "Name, email, and message are required" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Name, email, and message are required" },
+        { status: 400 }
+      );
+    }
+    if (!basicEmailLooksOk(email)) {
+      return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
     }
 
-    // Basic email format check (KISS): ensure there's an @ and a dot somewhere after it.
-    const atIndex = email.indexOf("@")
-    if (atIndex < 1 || email.indexOf(".", atIndex) === -1) {
-      return NextResponse.json({ error: "Invalid email address" }, { status: 400 })
+    const transporter = buildTransport();
+    if (!transporter) {
+      // Don’t crash the app; return a clear 503 so the client can show a friendly toast.
+      return NextResponse.json(
+        { error: "Email service not configured" },
+        { status: 503 }
+      );
     }
 
-    // Build the React email template safely via React.createElement
-    const reactElement = React.createElement(EmailTemplate, { name, email, phone, message })
+    const subject = `New Property Inquiry from ${name}`;
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+        <h1 style="color:#000;border-bottom:2px solid #000;padding-bottom:10px">New Property Inquiry</h1>
+        <div style="margin-top:20px">
+          <p><strong>Name:</strong> ${escapeHtml(name)}</p>
+          <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+          ${phone ? `<p><strong>Phone:</strong> ${escapeHtml(phone)}</p>` : ""}
+          <p><strong>Message:</strong></p>
+          <pre style="white-space:pre-wrap;padding:15px;background:#f5f5f5;border-left:4px solid #000">${escapeHtml(
+            message
+          )}</pre>
+        </div>
+        <div style="margin-top:30px;padding-top:20px;border-top:1px solid #e5e5e5;color:#666;font-size:12px">
+          <p>This inquiry was submitted through your luxury property landing page.</p>
+        </div>
+      </div>
+    `.trim();
 
-    // Send the email. Keep logs minimal and avoid returning the full provider response
-    // to the client to prevent leaking internal IDs or addresses.
-    await resend.emails.send({
-      from: `Luxury Estate <${SENDER_EMAIL!}>`,
-      to: [CONTACT_EMAIL!],
-      subject: `⚠️🏡 New Property Inquiry from ${name}`,
-      react: reactElement,
-    })
+    const text = [
+      "New Property Inquiry",
+      `Name: ${name}`,
+      `Email: ${email}`,
+      phone ? `Phone: ${phone}` : null,
+      "",
+      "Message:",
+      message,
+    ]
+      .filter(Boolean)
+      .join("\n");
 
-    // Return a generic success message.
-    return NextResponse.json({ message: "Message received" }, { status: 200 })
+    await transporter.sendMail({
+      from: SMTP_FROM!,
+      to: CONTACT_EMAIL!,
+      subject,
+      replyTo: email, // convenient for hitting "Reply"
+      text,
+      html,
+    });
+
+    return NextResponse.json({ message: "Message received" }, { status: 200 });
   } catch (err) {
-    // Log error server-side; don't leak internal errors to clients.
-    console.error("[contact] error sending email:", err)
-    return NextResponse.json({ error: "Failed to process request" }, { status: 500 })
+    console.error("[contact] email send failed:", err);
+    return NextResponse.json({ error: "Failed to process request" }, { status: 500 });
   }
+}
+
+// Simple HTML escaper to avoid HTML injection in the email body
+function escapeHtml(input: string) {
+  return input
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }

@@ -153,6 +153,8 @@ export function Contact() {
               />
             </div>
 
+            <input type="text" name="company" tabIndex={-1} autoComplete="off" style={{position:"absolute",left:"-9999px"}} />
+
             <Button
               type="submit"
               disabled={isSubmitting}
